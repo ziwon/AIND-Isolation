@@ -2,7 +2,84 @@
 test your agent's strength against a set of known agents using tournament.py
 and include the results in your report.
 """
-import random
+from isolation import Board
+
+
+INFINITY = float('inf')
+
+
+def number_of_legal_moves(game, move):
+    """Get the number of the list of possible moves for an L-shaped motion
+    (like a knight in chess)
+    """
+    if move == Board.NOT_MOVED:
+        return game.get_blank_spaces()
+
+    r, c = move
+    directions = [(-2, -1), (-2, 1), (-1, -2), (-1, 2),
+                  (1, -2), (1, 2), (2, -1), (2, 1)]
+
+    valid_moves = [(r + dr, c + dc) for dr, dc in directions
+                   if game.move_is_legal((r + dr, c + dc))]
+
+    return len(valid_moves)
+
+
+def deep_moves(game, player):
+    """Get the difference between all possbile moves from the current legal moves
+    """
+    own_moves = game.get_legal_moves(player)
+    opp_moves = game.get_legal_moves(game.get_opponent(player))
+
+    own_num, opp_num = 0, 0
+    own_num = sum([number_of_legal_moves(game, move) for move in own_moves])
+    opp_num = sum([number_of_legal_moves(game, move) for move in opp_moves])
+    return float(own_num - opp_num)
+
+
+def manhattan_distance(game, player):
+    """Get the standard Manhattan distance. In here, the distance between
+    two players should be divided by 3 for better heuristic, because
+    the agent moves 3 sqaures at a time like a knight in chess."""
+
+    (x1, y1) = game.get_player_location(player)
+    (x2, y2) = game.get_player_location(game.get_opponent(player))
+
+    D = abs(x1 - x2) + abs(y1 - y2)
+    D = D/3
+
+    return D
+
+
+def manhattan_distance_with_deep_moves(game, player):
+    """Get the Manhattan distance with all possbile moves. `deep_moves()`
+    function can be considered the mininum cost function for moving from
+    one space to an adjancnt space.
+    """
+    cost  = deep_moves(game, player)
+    distance = manhattan_distance(game, player)
+    return cost * distance
+
+
+def forecast_manhattan_distance(game, move, player):
+    """Get the Manhattan distance at new game generated the given move.
+    """
+    new_game = game.forecast_move(move)
+    return manhattan_distance(new_game, player)
+
+
+def deep_distance(game, player):
+    """
+    Get the difference of Manhattan distance between all possbile moves
+    from the current legal moves.
+    """
+    own_moves = game.get_legal_moves(player)
+    opp_moves = game.get_legal_moves(game.get_opponent(player))
+
+    own_dis, opp_dis = 0, 0
+    own_dis = sum([forecast_manhattan_distance(game, move, player) for move in own_moves])
+    opp_dis = sum([forecast_manhattan_distance(game, move, player) for move in opp_moves])
+    return float(own_dis - opp_dis)
 
 
 class SearchTimeout(Exception):
@@ -35,7 +112,13 @@ def custom_score(game, player):
         The heuristic value of the current game state to the specified player.
     """
     # TODO: finish this function!
-    raise NotImplementedError
+    if game.is_loser(player):
+        return -INFINITY
+
+    if game.is_winner(player):
+        return INFINITY
+
+    return manhattan_distance_with_deep_moves(game, player)
 
 
 def custom_score_2(game, player):
@@ -61,7 +144,13 @@ def custom_score_2(game, player):
         The heuristic value of the current game state to the specified player.
     """
     # TODO: finish this function!
-    raise NotImplementedError
+    if game.is_loser(player):
+        return -INFINITY
+
+    if game.is_winner(player):
+        return INFINITY
+
+    return deep_moves(game, player)
 
 
 def custom_score_3(game, player):
@@ -86,8 +175,13 @@ def custom_score_3(game, player):
     float
         The heuristic value of the current game state to the specified player.
     """
-    # TODO: finish this function!
-    raise NotImplementedError
+    if game.is_loser(player):
+        return -INFINITY
+
+    if game.is_winner(player):
+        return INFINITY
+
+    return deep_distance(game, player)
 
 
 class IsolationPlayer:
@@ -209,11 +303,70 @@ class MinimaxPlayer(IsolationPlayer):
                 each helper function or else your agent will timeout during
                 testing.
         """
+        # TODO: finish this function!
+
+        # Check the time limit
         if self.time_left() < self.TIMER_THRESHOLD:
             raise SearchTimeout()
 
-        # TODO: finish this function!
-        raise NotImplementedError
+        # Return (-1, -1) if there are no legam moves
+        legal_moves = game.get_legal_moves()
+        if not legal_moves:
+            return (-1, -1)
+
+        # Find the moves with the highest score
+        def max_value(game, depth):
+
+            # Check the time limit
+            if self.time_left() < self.TIMER_THRESHOLD:
+                raise SearchTimeout()
+
+            # Evaluate the score value if the depth is terminal state
+            if depth == 0:
+                return self.score(game, self)
+
+            # Initialize with the lowest score
+            v = -INFINITY
+
+            # Find the higheset score from the list of possible moves
+            for m in game.get_legal_moves():
+                # Maximize the minimum value of next new borad
+                v = max(v, min_value(game.forecast_move(m), depth-1))
+            return v
+
+        # Find the moves with the lowest score
+        def min_value(game, depth):
+
+            # Check the time limit
+            if self.time_left() < self.TIMER_THRESHOLD:
+                raise SearchTimeout()
+
+            # Evaluate the score value if the depth is in terminal state
+            if depth == 0:
+                return self.score(game, self)
+
+            # Initialize with the highest score
+            v = INFINITY
+
+            # Find the lowest score from the list of possible moves
+            for m in game.get_legal_moves():
+                # Minimize the maximum value of next new board
+                v = min(v, max_value(game.forecast_move(m), depth-1))
+            return v
+
+        # Initialize the best score
+        best_score = -INFINITY
+
+        # Initialize the best move
+        best_move = (-1, -1)
+
+        # Find the best move from the list of possible moves
+        for m in legal_moves:
+            v = min_value(game.forecast_move(m), depth-1)
+            if v > best_score:
+                best_score = v
+                best_move = m
+        return best_move
 
 
 class AlphaBetaPlayer(IsolationPlayer):
@@ -254,8 +407,42 @@ class AlphaBetaPlayer(IsolationPlayer):
         """
         self.time_left = time_left
 
-        # TODO: finish this function!
-        raise NotImplementedError
+        # Initialize the best move
+        best_move = (-1, -1)
+
+        # Initialize the bset score
+        best_score = -INFINITY
+
+        # Get the score and move at the current depth with alphabeta search
+        def depth_limited_search(game, depth):
+            score = self.score(game, self)
+            move = self.alphabeta(game, depth)
+            return score, move
+
+        try:
+            # Run repeatedly with increasing depth limits until the best moves found
+            depth = 1;
+            while True:
+                # Check the time limit
+                if self.time_left() < self.TIMER_THRESHOLD:
+                    raise SearchTimeout()
+
+                # Update the best core and best move
+                best_score, best_move = depth_limited_search(game, depth)
+
+                # Increase current depth
+                depth += 1
+
+                # Break the loop if the best core is the lowest value or the
+                # highest value
+                if best_score == INFINITY or best_score == -INFINITY:
+                    break
+
+        except SearchTimeout:
+            pass
+
+        # Return the final best move
+        return best_move
 
     def alphabeta(self, game, depth, alpha=float("-inf"), beta=float("inf")):
         """Implement depth-limited minimax search with alpha-beta pruning as
@@ -302,8 +489,77 @@ class AlphaBetaPlayer(IsolationPlayer):
                 each helper function or else your agent will timeout during
                 testing.
         """
+        # Check the time limit
         if self.time_left() < self.TIMER_THRESHOLD:
             raise SearchTimeout()
 
-        # TODO: finish this function!
-        raise NotImplementedError
+        # Return (-1, -1) if there are no legam moves
+        legal_moves = game.get_legal_moves()
+        if not legal_moves:
+            return (-1, -1)
+
+        # Find the move with the highest score
+        def max_value(game, depth, alpha, beta):
+            # Check the time limit
+            if self.time_left() < self.TIMER_THRESHOLD:
+                raise SearchTimeout()
+
+            # Evaluate the score value if the depth is in terminal state
+            if depth == 0:
+                return self.score(game, self)
+
+            # Initialize the score with the lowest score
+            v = -INFINITY
+
+            # Find the best alpha
+            for m in game.get_legal_moves():
+                # Maximize the minimum value of next new board
+                v = max(v, min_value(game.forecast_move(m), depth-1, alpha, beta))
+                if v >= beta:
+                    return v
+
+                # Update the current alpha
+                alpha = max(alpha, v)
+            return v
+
+        # Find the move with the lowest score
+        def min_value(game, depth, alpha, beta):
+            # Check the time limit
+            if self.time_left() < self.TIMER_THRESHOLD:
+                raise SearchTimeout()
+
+            # Evaluate the score value if the depth is in terminal state
+            if depth == 0:
+                return self.score(game, self)
+
+            # Initialize the score with the highest score
+            v = INFINITY
+
+            # Find the best beta
+            for m in game.get_legal_moves():
+                # Minimize the maximum value of next new board
+                v = min(v, max_value(game.forecast_move(m), depth-1, alpha, beta))
+                if v <= alpha:
+                    return v
+
+                # Update the current beta
+                beta = min(beta, v)
+            return v
+
+        # Initialize the best core with lowest score
+        best_score = -INFINITY
+
+        # Initialize beta with the highest score
+        beta = INFINITY
+
+        # Initialize the best move
+        best_move = (-1, -1)
+
+        # Find the best move from the list of possible moves with alpha beta
+        # search algorithm
+        for m in game.get_legal_moves():
+            v = min_value(game.forecast_move(m), depth-1, best_score, beta)
+            if v > best_score:
+                best_score = v
+                best_move = m
+        return best_move
